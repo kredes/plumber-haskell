@@ -116,3 +116,21 @@ instance Show a => Show(TExpr a) where
 instance Show a => Show(CExpr a) where
   show (CVar x) = x
   show (Connector x) = "CONNECTOR " ++ (show x)
+  
+  
+-- 3.1
+class SymTable m where
+  update :: m a -> String -> Val a -> m a
+  value :: m a -> String -> Maybe (Val a)
+  start :: m a
+  
+data Val a = 
+    NumVal a
+  | TubeVal a
+  | ConnVal a
+  | VecVal [a]
+  deriving (Show, Read)
+  
+-- | TubeVal (Tube (NExpr a) (NExpr a))
+-- | ConnVal (Connector (NExpr a))
+-- | VecVal  [Tube (NExpr a) (NExpr a)]
