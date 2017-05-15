@@ -130,11 +130,10 @@ data Val a =
   | TubeVal (TExpr a)
   | ConnVal (CExpr a)
   | VecVal [(TExpr a)]
-  | None
   deriving (Show, Eq)
 
 -- 3.2
-data Symbol a = Symbol Ident (Val a) deriving (Show, Eq)
+data Symbol a = Symbol Ident (Val a) | None deriving (Show, Eq)
 
 getIdent :: Symbol a -> String
 getIdent (Symbol ident _) = ident
@@ -200,22 +199,10 @@ deleteX (Node t1 v t2) = (Node t1 v2 (delete t2 v2))
   where 
     v2 = leftmostElement t2
 
--- Return leftist element of tree (is used on subtree)
+-- Return leftmost element of tree
 leftmostElement :: (Ord a) => Tree a -> a
 leftmostElement (Node Nil v _) = v
 leftmostElement (Node t1 _ _) = leftmostElement t1
-
--- Create tree from list of elemtents
-ctree :: (Ord a) => [a] -> Tree a
-ctree [] = Nil
-ctree (h:t) = ctree2 (Node Nil h Nil) t
-  where
-    ctree2 tr [] = tr
-    ctree2 tr (h:t) = ctree2 (insert tr h) t
-
-inorder :: (Ord a) => Tree a -> [a]
-inorder Nil = []
-inorder (Node t1 v t2) = inorder t1 ++ [v] ++ inorder t2
 
 
 data SymTableTree a = SymTableTree (Tree (Symbol a)) deriving(Show)
@@ -223,12 +210,16 @@ data SymTableTree a = SymTableTree (Tree (Symbol a)) deriving(Show)
 getT1 (SymTableTree (Node t1 _ _)) = t1
 getT2 (SymTableTree (Node _ _ t2)) = t2
 
+getTree (SymTableTree node) = node
+
+
 instance SymTable SymTableTree where
   update (SymTableTree Nil) ident val = SymTableTree (Node Nil (Symbol ident val) Nil)
   update (SymTableTree t@(Node t1 v t2)) ident val
+    | v == None = SymTableTree (Node Nil (Symbol ident val) Nil)
     | idv == ident = SymTableTree (Node t1 (Symbol ident val) t2)
-    | ident < idv = SymTableTree (Node (getT1 (update (SymTableTree t1) ident val)) v t2)
-    | ident > idv = SymTableTree (Node t1 v (getT2 (update (SymTableTree t2) ident val)))
+    | ident < idv = SymTableTree (Node (getTree (update (SymTableTree t1) ident val)) v t2)
+    | ident > idv = SymTableTree (Node t1 v (getTree (update (SymTableTree t2) ident val)))
     where 
       idv = getIdent v
   
@@ -240,8 +231,5 @@ instance SymTable SymTableTree where
     where
       idv = getIdent v
     
-  start symt = SymTableTree (Node Nil (Symbol "null" None) Nil)
-
-
-
+  start symt = SymTableTree (Node Nil None Nil)
 
