@@ -1,6 +1,4 @@
 import System.IO
-import qualified Data.List
-
 
 -- 2.1
 type Ident = String
@@ -40,6 +38,8 @@ data BExpr a =
   | Eq (NExpr a) (NExpr a)
   | Empty Ident
   | Full Ident
+  | True
+  | False
   deriving (Read, Eq)
   
 data TExpr a =
@@ -123,13 +123,14 @@ instance Show a => Show(CExpr a) where
 class SymTable m where
   update :: (Eq a) => (m a) -> String -> Val a -> (m a)
   value :: (Eq a) => (m a) -> String -> Maybe (Val a)
-  start :: (Eq a) => (m a) -> (m a)
+  start :: (Eq a) => (m a)
   
 data Val a = 
     NumVal (NExpr a)
   | TubeVal (TExpr a)
   | ConnVal (CExpr a)
-  | VecVal [(TExpr a)]
+  | VecVal (NExpr a) [(TExpr a)]
+  | BoolVal BExpr
   deriving (Show, Eq)
 
 -- 3.2
@@ -161,7 +162,7 @@ instance SymTable SymTableList where
     | xs == [] = Nothing
     | otherwise = value (SymTableList xs) ident
     
-  start symt = symt
+  start = SymTableList []
 
 -- 3.3
 data Tree a = Nil | Node (Tree a) a (Tree a) deriving(Show)
@@ -231,5 +232,76 @@ instance SymTable SymTableTree where
     where
       idv = getIdent v
     
-  start symt = SymTableTree (Node Nil None Nil)
+  start = SymTableTree (Node Nil None Nil)
 
+-- 3.4
+left (Left a) = a
+right (Right b) = b
+
+class Evaluable e where
+  eval :: (Num a, Ord a, SymTable m) => m a -> (e a) -> (Either String (Val a))
+  --typeCheck :: (Ident -> String) -> (e a) -> Bool
+  
+getLength (Just (TubeVal (Tube l _))) =  l
+getDiameter (Just (TubeVal (Tube _ d))) = d
+getNum (Just (NumVal n)) = n
+
+  
+instance Evaluable NExpr where
+  eval symt (Var ident) =
+    if (value symt ident) == Nothing
+       then Left "error: undefined variable" 
+       else eval symt (getNum (value symt ident))
+  eval symt (Const n) = Right n
+  eval symt (Plus x y) = Right $ NumVal $ Const $ (right $ eval symt x) + (right $ eval symt y)
+  eval symt (Minus x y) = Right $ NumVal $ Const $ (right $ eval symt x) - (right $ eval symt y)
+  eval symt (Times x y) = Right $ NumVal $ Const $ (right $ eval symt x) * (right $ eval symt y)
+  eval symt (Length ident) = 
+    if (value symt ident) == Nothing 
+       then Left "error: undefined variable" 
+       else eval symt (getLength (value symt ident))
+  eval symt (Diameter ident) =
+    if (value symt ident) == Nothing
+       then Left "error: undefined variable"
+       else eval symt (getDiameter (value symt ident))
+       
+
+getVecSize (Just (VecVal _ elems)) = length elems
+getVecMaxSize (Just (VecVal maxSize _)) = maxSize
+       
+instance Evaluable BExpr where
+  eval symt (And x y) = Right $ (right $ eval symt x) && (right $ eval symt y)
+  eval symt (Or x y) = Right $ (right $ eval symt x) || (right $ eval symt y)
+  eval symt (Not x) = Right $ not (right $ eval symt x)
+  eval symt (Gt x y) = Right $ (right $ eval symt x) > (right $ eval symt y)
+  eval symt (Lt x y) = Right $ (right $ eval symt x) < (right $ eval symt y)
+  eval symt (Eq x y) = Right $ (right $ eval symt x) == (right $ eval symt y)
+  eval symt (Empty ident) = 
+    if (value symt ident) == Nothing
+       then Left "error: undefined variable" 
+       else Right $ BoolVal (getVecSize (value symt ident) == 0)
+  eval symt (Full ident) = 
+    if (vec) == Nothing
+       then Left "error: undefined variable" 
+       else Right $ BoolVal ((getVecSize vec) == (right $ eval symt (getVecMaxSize vec)))
+    where vec = value symt ident
+  
+data TExpr a =
+    TVar Ident
+  | Merge (TExpr a) (CExpr a) (TExpr a)
+  | Tube (NExpr a) (NExpr a)
+  deriving(Read, Eq)
+  
+data CExpr a =
+    CVar Ident
+  | Connector (NExpr a)
+  deriving(Read, Eq)
+  
+  
+instance Evaluable TExpr where
+  eval symt (TVar ident) = 
+    if (value symt ident) == Nothing
+       then Left "error: undefined variable" 
+       else Right $ getVecSize (value symt ident) == 0
+  
+--interpretCommand :: (Num a, Ord a, SymTable m) => m a -> [a] -> Command a -> ((Either String [a]), m a, [a])
