@@ -130,6 +130,7 @@ data Val a =
   | TubeVal (TExpr a)
   | ConnVal (CExpr a)
   | VecVal [(TExpr a)]
+  | None
   deriving (Show, Eq)
 
 -- 3.2
@@ -162,4 +163,85 @@ instance SymTable SymTableList where
     | otherwise = value (SymTableList xs) ident
     
   start symt = symt
+
+-- 3.3
+data Tree a = Nil | Node (Tree a) a (Tree a) deriving(Show)
+
+empty :: (Ord a) => Tree a -> Bool
+empty Nil = True
+empty  _  = False
+
+contains :: (Ord a) => (Tree a) -> a -> Bool
+contains Nil _ = False
+contains (Node t1 v t2) x 
+  | x == v = True
+  | x  < v = contains t1 x 
+  | x  > v = contains t2 x
+
+insert :: (Ord a) => Tree a -> a -> Tree a
+insert Nil x = Node Nil x Nil
+insert (Node t1 v t2) x 
+  | v == x = Node t1 v t2
+  | v  < x = Node t1 v (insert t2 x)
+  | v  > x = Node (insert t1 x) v t2
+
+delete :: (Ord a) => Tree a -> a -> Tree a
+delete Nil _ = Nil
+delete (Node t1 v t2) x  
+  | x == v = deleteX (Node t1 v t2)
+  | x  < v = Node (delete t1 x) v t2
+  | x  > v = Node t1 v (delete t2 x)
+
+-- Delete root
+deleteX :: (Ord a) => Tree a -> Tree a 
+deleteX (Node Nil v t2) = t2
+deleteX (Node t1 v Nil) = t1
+deleteX (Node t1 v t2) = (Node t1 v2 (delete t2 v2))
+  where 
+    v2 = leftmostElement t2
+
+-- Return leftist element of tree (is used on subtree)
+leftmostElement :: (Ord a) => Tree a -> a
+leftmostElement (Node Nil v _) = v
+leftmostElement (Node t1 _ _) = leftmostElement t1
+
+-- Create tree from list of elemtents
+ctree :: (Ord a) => [a] -> Tree a
+ctree [] = Nil
+ctree (h:t) = ctree2 (Node Nil h Nil) t
+  where
+    ctree2 tr [] = tr
+    ctree2 tr (h:t) = ctree2 (insert tr h) t
+
+inorder :: (Ord a) => Tree a -> [a]
+inorder Nil = []
+inorder (Node t1 v t2) = inorder t1 ++ [v] ++ inorder t2
+
+
+data SymTableTree a = SymTableTree (Tree (Symbol a)) deriving(Show)
+
+getT1 (SymTableTree (Node t1 _ _)) = t1
+getT2 (SymTableTree (Node _ _ t2)) = t2
+
+instance SymTable SymTableTree where
+  update (SymTableTree Nil) ident val = SymTableTree (Node Nil (Symbol ident val) Nil)
+  update (SymTableTree t@(Node t1 v t2)) ident val
+    | idv == ident = SymTableTree (Node t1 (Symbol ident val) t2)
+    | ident < idv = SymTableTree (Node (getT1 (update (SymTableTree t1) ident val)) v t2)
+    | ident > idv = SymTableTree (Node t1 v (getT2 (update (SymTableTree t2) ident val)))
+    where 
+      idv = getIdent v
+  
+  value (SymTableTree Nil) ident = Nothing
+  value (SymTableTree t@(Node t1 v t2)) ident
+    | idv == ident = Just (getVal v)
+    | ident < idv = value (SymTableTree t1) ident
+    | ident > idv = value (SymTableTree t2) ident
+    where
+      idv = getIdent v
+    
+  start symt = SymTableTree (Node Nil (Symbol "null" None) Nil)
+
+
+
 
