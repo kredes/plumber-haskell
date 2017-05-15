@@ -1,4 +1,5 @@
 import System.IO
+import qualified Data.List
 
 
 -- 2.1
@@ -18,7 +19,7 @@ data Command a =
   | Push Ident Ident
   | Cond (BExpr a) (Command a) (Command a)
   | Loop (BExpr a) (Command a)
-  deriving (Read)
+  deriving (Read, Eq)
   
 data NExpr a =
     Var Ident
@@ -28,7 +29,7 @@ data NExpr a =
   | Times (NExpr a) (NExpr a)
   | Length Ident
   | Diameter Ident
-  deriving (Read)
+  deriving (Read, Eq)
 
 data BExpr a =
     And (BExpr a) (BExpr a)
@@ -39,18 +40,18 @@ data BExpr a =
   | Eq (NExpr a) (NExpr a)
   | Empty Ident
   | Full Ident
-  deriving (Read)
+  deriving (Read, Eq)
   
 data TExpr a =
     TVar Ident
   | Merge (TExpr a) (CExpr a) (TExpr a)
   | Tube (NExpr a) (NExpr a)
-  deriving(Read)
+  deriving(Read, Eq)
   
 data CExpr a =
     CVar Ident
   | Connector (NExpr a)
-  deriving(Read)
+  deriving(Read, Eq)
   
 
 -- 2.2 - Shows a command with the given indentation (s)
@@ -120,17 +121,45 @@ instance Show a => Show(CExpr a) where
   
 -- 3.1
 class SymTable m where
-  update :: m a -> String -> Val a -> m a
-  value :: m a -> String -> Maybe (Val a)
-  start :: m a
+  update :: (Eq a) => (m a) -> String -> Val a -> (m a)
+  value :: (Eq a) => (m a) -> String -> Maybe (Val a)
+  start :: (Eq a) => (m a) -> (m a)
   
 data Val a = 
-    NumVal a
-  | TubeVal a
-  | ConnVal a
-  | VecVal [a]
-  deriving (Show, Read)
+    NumVal (NExpr a)
+  | TubeVal (TExpr a)
+  | ConnVal (CExpr a)
+  | VecVal [(TExpr a)]
+  deriving (Show, Eq)
+
+-- 3.2
+data Symbol a = Symbol Ident (Val a) deriving (Show, Eq)
+
+getIdent :: Symbol a -> String
+getIdent (Symbol ident _) = ident
+
+getVal :: Symbol a -> Val a
+getVal (Symbol _ val) = val
+
+
+data SymTableList a = SymTableList [Symbol a] deriving(Show)
+
+getTail :: SymTableList a -> [Symbol a]
+getTail (SymTableList (x:xs)) = xs
+
+instance SymTable SymTableList where
+  update (SymTableList l@(x:xs)) ident val
+    | (x:xs) == [] = SymTableList [(Symbol ident val)] 
+    | (getIdent x) == ident = SymTableList ((Symbol ident val):xs)
+    | xs == [] = SymTableList (x:[(Symbol ident val)])
+    | otherwise = SymTableList (x: getTail (update (SymTableList xs) ident val))
   
--- | TubeVal (Tube (NExpr a) (NExpr a))
--- | ConnVal (Connector (NExpr a))
--- | VecVal  [Tube (NExpr a) (NExpr a)]
+  
+  value (SymTableList l@(x:xs)) ident
+    | l == [] = Nothing
+    | (getIdent x) == ident = Just (getVal x)
+    | xs == [] = Nothing
+    | otherwise = value (SymTableList xs) ident
+    
+  start symt = symt
+
